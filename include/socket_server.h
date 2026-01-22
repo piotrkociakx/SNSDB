@@ -5,6 +5,7 @@
 #include <boost/asio.hpp>
 #include <memory>
 #include <string>
+#include <atomic>
 
 namespace snsdb {
 
@@ -28,7 +29,7 @@ private:
     boost::asio::io_context io_context_;
     std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
     unsigned short port_;
-    bool running_;
+    std::atomic<bool> running_;
 };
 
 } // namespace snsdb

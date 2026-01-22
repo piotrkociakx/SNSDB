@@ -2,16 +2,6 @@
 #include <algorithm>
 #include <iostream>
 
-#ifdef USE_CUDA
-// CUDA kernel for XOR encryption
-__global__ void xor_encrypt_kernel(uint8_t* data, const uint8_t* key, size_t data_size, size_t key_size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < data_size) {
-        data[idx] ^= key[idx % key_size];
-    }
-}
-#endif
-
 namespace snsdb {
 
 CudaEncryption::CudaEncryption() : cuda_available_(false) {
@@ -37,29 +27,69 @@ std::vector<uint8_t> CudaEncryption::encrypt(const std::vector<uint8_t>& data, c
     
 #ifdef USE_CUDA
     if (cuda_available_ && !data.empty() && !key.empty()) {
-        uint8_t* d_data;
-        uint8_t* d_key;
+        uint8_t* d_data = nullptr;
+        uint8_t* d_key = nullptr;
         
         // Allocate device memory
-        cudaMalloc(&d_data, data.size());
-        cudaMalloc(&d_key, key.size());
+        cudaError_t error = cudaMalloc(&d_data, data.size());
+        if (error != cudaSuccess) {
+            std::cerr << "CUDA malloc failed: " << cudaGetErrorString(error) << std::endl;
+            goto cpu_fallback;
+        }
+        
+        error = cudaMalloc(&d_key, key.size());
+        if (error != cudaSuccess) {
+            std::cerr << "CUDA malloc failed: " << cudaGetErrorString(error) << std::endl;
+            cudaFree(d_data);
+            goto cpu_fallback;
+        }
         
         // Copy data to device
-        cudaMemcpy(d_data, data.data(), data.size(), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
+        error = cudaMemcpy(d_data, data.data(), data.size(), cudaMemcpyHostToDevice);
+        if (error != cudaSuccess) {
+            std::cerr << "CUDA memcpy failed: " << cudaGetErrorString(error) << std::endl;
+            cudaFree(d_data);
+            cudaFree(d_key);
+            goto cpu_fallback;
+        }
+        
+        error = cudaMemcpy(d_key, key.data(), key.size(), cudaMemcpyHostToDevice);
+        if (error != cudaSuccess) {
+            std::cerr << "CUDA memcpy failed: " << cudaGetErrorString(error) << std::endl;
+            cudaFree(d_data);
+            cudaFree(d_key);
+            goto cpu_fallback;
+        }
         
         // Launch kernel
         int block_size = 256;
         int grid_size = (data.size() + block_size - 1) / block_size;
         xor_encrypt_kernel<<<grid_size, block_size>>>(d_data, d_key, data.size(), key.size());
         
+        error = cudaGetLastError();
+        if (error != cudaSuccess) {
+            std::cerr << "CUDA kernel launch failed: " << cudaGetErrorString(error) << std::endl;
+            cudaFree(d_data);
+            cudaFree(d_key);
+            goto cpu_fallback;
+        }
+        
         // Copy result back
-        cudaMemcpy(result.data(), d_data, data.size(), cudaMemcpyDeviceToHost);
+        error = cudaMemcpy(result.data(), d_data, data.size(), cudaMemcpyDeviceToHost);
+        if (error != cudaSuccess) {
+            std::cerr << "CUDA memcpy failed: " << cudaGetErrorString(error) << std::endl;
+            cudaFree(d_data);
+            cudaFree(d_key);
+            goto cpu_fallback;
+        }
         
         // Free device memory
         cudaFree(d_data);
         cudaFree(d_key);
-    } else
+        return result;
+    }
+    
+cpu_fallback:
 #endif
     {
         // CPU fallback

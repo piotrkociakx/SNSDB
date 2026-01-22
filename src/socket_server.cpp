@@ -3,6 +3,7 @@
 #ifdef USE_BOOST_ASIO
 #include <iostream>
 #include <thread>
+#include <atomic>
 
 namespace snsdb {
 
@@ -34,8 +35,8 @@ void SocketServer::start() {
 }
 
 void SocketServer::stop() {
-    if (running_) {
-        running_ = false;
+    bool expected = true;
+    if (running_.compare_exchange_strong(expected, false)) {
         io_context_.stop();
         if (acceptor_) {
             acceptor_->close();
@@ -53,7 +54,7 @@ void SocketServer::accept_connection() {
             std::thread(&SocketServer::handle_client, this, socket).detach();
         }
         
-        if (running_) {
+        if (running_.load()) {
             accept_connection();
         }
     });
@@ -61,8 +62,9 @@ void SocketServer::accept_connection() {
 
 void SocketServer::handle_client(std::shared_ptr<tcp::socket> socket) {
     try {
+        constexpr size_t BUFFER_SIZE = 4096;
         while (true) {
-            char data[1024];
+            char data[BUFFER_SIZE];
             boost::system::error_code error;
             
             size_t length = socket->read_some(boost::asio::buffer(data), error);

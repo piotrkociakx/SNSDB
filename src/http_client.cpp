@@ -94,6 +94,9 @@ HttpClient::Response HttpClient::perform_request(const std::string& url, const s
 #ifdef USE_CURL
     if (!curl_) return response;
     
+    // Reset curl handle to clean state
+    curl_easy_reset(curl_);
+    
     std::string response_body;
     
     curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
