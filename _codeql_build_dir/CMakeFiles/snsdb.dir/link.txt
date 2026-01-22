@@ -1,1 +1,0 @@
-/home/runner/work/SNSDB/.codeql-scratch/dbs/cpp/working/autobuild/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/snsdb.dir/link.d CMakeFiles/snsdb.dir/src/main.cpp.o CMakeFiles/snsdb.dir/src/binary_reader.cpp.o CMakeFiles/snsdb.dir/src/gc_manager.cpp.o CMakeFiles/snsdb.dir/src/http_client.cpp.o CMakeFiles/snsdb.dir/src/cuda_encryption.cpp.o -o snsdb
